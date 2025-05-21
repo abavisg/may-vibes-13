@@ -201,7 +201,7 @@ export default function WanderSnapPage() {
       });
 
       if (!aiOutput.suggestions || aiOutput.suggestions.length === 0) {
-        toast({ title: 'No Suggestions', description: `The AI (${aiProvider}) couldn't find any suggestions. Try different options!` });
+        toast({ title: 'No Suggestions', description: `The AI (${aiProviderOptions.find(opt => opt.value === aiProvider)?.label}) couldn't find any suggestions. Try different options or check the AI provider setup.` });
         setActivities([]);
       } else {
         const newActivities: Activity[] = aiOutput.suggestions.map((sugg: ActivitySuggestion) => ({
@@ -218,9 +218,19 @@ export default function WanderSnapPage() {
         }));
         setActivities(newActivities);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error fetching or processing AI suggestions from ${aiProvider}:`, error);
-      toast({ title: 'AI Suggestion Error', description: `Could not get suggestions from ${aiProvider}. Please check your setup and try again.`, variant: 'destructive' });
+      let errorMessage = `Could not get suggestions from ${aiProviderOptions.find(opt => opt.value === aiProvider)?.label}.`;
+      if (error.message) {
+        errorMessage += ` Details: ${error.message}`;
+      } else {
+        errorMessage += ` Please check your setup and try again.`;
+      }
+      toast({ 
+        title: 'AI Suggestion Error', 
+        description: errorMessage, 
+        variant: 'destructive' 
+      });
       setActivities([]);
     } finally {
       setIsLoadingActivities(false);
@@ -330,7 +340,7 @@ export default function WanderSnapPage() {
           </div>
           <div className="text-xs text-muted-foreground text-center">
             {aiProvider === 'googleai' && 'Ensure GOOGLE_API_KEY is set in your environment.'}
-            {aiProvider === 'ollama' && 'Ensure your local Ollama server is running (typically at http://localhost:11434) and has the selected model (e.g., mistral).'}
+            {aiProvider === 'ollama' && 'Ensure your local Ollama server is running (e.g., http://localhost:11434) and has the selected model (e.g., mistral).'}
           </div>
         </CardContent>
       </Card>
@@ -371,3 +381,4 @@ export default function WanderSnapPage() {
     </div>
   );
 }
+

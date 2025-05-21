@@ -86,7 +86,7 @@ const suggestActivitiesFlow = ai.defineFlow(
   async (input) => {
     if (input.aiProvider === 'ollama') {
       console.log("Attempting to use Ollama directly.");
-      const ollamaModel = 'tinyllama:latest'; // Or make this configurable
+      const ollamaModel = 'mistral'; // Or make this configurable, e.g. 'llama3', 'tinyllama:latest' etc.
       const ollamaPrompt = `You are WanderSnap, a friendly and creative AI assistant.
 Generate between 5 and 10 diverse activity suggestions based on the following user inputs. If no suitable activities can be found, return an empty array for "suggestions".
 User's Location Context: ${input.locationContext}
@@ -147,29 +147,23 @@ Example of a single suggestion object structure:
         let parsedOutput;
         try {
           parsedOutput = JSON.parse(suggestionsJsonString);
-        } catch (e) {
+        } catch (e: any) {
           console.error('Failed to parse JSON from Ollama response string:', suggestionsJsonString, e);
-          throw new Error('Ollama returned a string that is not valid JSON.');
+          throw new Error(`Ollama returned data that is not valid JSON. Details: ${e.message}`);
         }
         
         // Validate the parsed output against our Zod schema
         const validationResult = SuggestActivitiesOutputSchema.safeParse(parsedOutput);
         if (!validationResult.success) {
           console.error('Ollama output failed Zod validation:', validationResult.error.flatten());
-          // Optionally, you could try to salvage partial data or return a more specific error
-          throw new Error('Ollama output did not match the expected schema.');
+          throw new Error(`Ollama output did not match the expected schema. Issues: ${validationResult.error.message}`);
         }
-
-        // No need to check validationResult.data.suggestions.length === 0 here,
-        // as the schema now allows an empty array.
-        // The UI will handle the "no suggestions" case.
         return validationResult.data;
 
       } catch (error) {
         console.error('Error making direct call to Ollama or processing its response:', error);
-        // Fallback or rethrow, depending on desired behavior
-        toast({ title: 'Ollama Connection Error', description: `Could not get suggestions from local Ollama. Is it running? Error: ${error.message}`, variant: 'destructive' });
-        return { suggestions: [] }; // Return empty suggestions on error
+        // Re-throw the error so it can be caught by the calling component
+        throw error;
       }
 
     } else { // 'googleai' provider (or any other Genkit-managed provider)
@@ -194,14 +188,3 @@ Example of a single suggestion object structure:
     }
   }
 );
-
-// Helper for direct Ollama call toast, not used in Genkit path.
-// This is a bit of a hack as flows shouldn't directly cause UI toasts.
-// Consider moving UI feedback to the calling component.
-const toast = (options: { title: string; description: string; variant?: 'destructive' | 'default' }) => {
-  // This is a placeholder. In a real app, you'd use your actual toast mechanism.
-  // For server-side code, you can't directly call client-side hooks like useToast.
-  // This would typically be handled by returning an error/status that the client interprets.
-  console.warn(`SERVER TOAST: ${options.title} - ${options.description}`);
-};
-
