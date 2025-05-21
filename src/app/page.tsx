@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ActivityCard } from '@/components/activity-card';
 import { useToast } from '@/hooks/use-toast';
 import { suggestActivities, type ActivitySuggestion } from '@/ai/flows/suggest-activities-flow';
+import { generateActivityImage, type GenerateActivityImageOutput } from '@/ai/flows/generate-activity-image-flow';
 import {
   LocateFixed,
   Loader2,
@@ -194,6 +195,32 @@ export default function WanderSnapPage() {
     }
   };
 
+  const fetchAndSetActivityImages = async (currentActivities: Activity[]) => {
+    currentActivities.forEach(async (activity, index) => {
+      if (activity.dataAiHint && aiProvider === 'googleai') { // Only generate images if Google AI is selected for now
+        try {
+          console.log(`Requesting image for: ${activity.name} with hint: ${activity.dataAiHint}`);
+          const imageOutput: GenerateActivityImageOutput = await generateActivityImage({ keywords: activity.dataAiHint });
+          if (imageOutput.imageDataUri) {
+            setActivities(prevActivities => {
+              const newActivities = [...prevActivities];
+              // Ensure the activity still exists at this index (e.g. user hasn't made a new search)
+              if (newActivities[index] && newActivities[index].id === activity.id) {
+                newActivities[index] = { ...newActivities[index], photoUrl: imageOutput.imageDataUri };
+              }
+              return newActivities;
+            });
+          } else {
+            console.warn(`No image data URI returned for ${activity.name}`);
+          }
+        } catch (imgError) {
+          console.error(`Failed to generate image for '${activity.name}' with keywords '${activity.dataAiHint}':`, imgError);
+          // Image will remain the placeholder
+        }
+      }
+    });
+  };
+
   const handleFindActivities = async () => {
     if (!location && !locationDisplayName) {
       toast({ title: 'Missing Location', description: 'Please detect your location first.', variant: 'destructive' });
@@ -230,7 +257,7 @@ export default function WanderSnapPage() {
         toast({ title: 'No Suggestions', description: `The AI (${aiProviderOptions.find(opt => opt.value === aiProvider)?.label}) couldn't find any suggestions. Try different options or check the AI provider setup.` });
         setActivities([]);
       } else {
-        const newActivities: Activity[] = aiOutput.suggestions.map((sugg: ActivitySuggestion) => {
+        const initialActivities: Activity[] = aiOutput.suggestions.map((sugg: ActivitySuggestion) => {
           let hint = sugg.imageKeywords;
           if (!hint) {
             hint = `${sugg.category.toLowerCase()} ${sugg.name.split(' ')[0].toLowerCase()}`;
@@ -238,7 +265,7 @@ export default function WanderSnapPage() {
           const finalHint = hint.trim().replace(/[^a-zA-Z0-9\s]/g, '').split(/\s+/).slice(0, 2).join(' ').toLowerCase();
           
           const categoryColor = getCategoryPlaceholderColor(sugg.category);
-          const photoUrl = `https://placehold.co/600x400/${categoryColor}/000000.png`; // Use black for text color on placeholder
+          const photoUrl = `https://placehold.co/600x400/${categoryColor}/000000.png`;
 
           return {
             id: crypto.randomUUID(),
@@ -253,7 +280,13 @@ export default function WanderSnapPage() {
             estimatedDuration: sugg.estimatedDuration,
           };
         });
-        setActivities(newActivities);
+        setActivities(initialActivities); // Display activities with placeholders first
+
+        // Asynchronously fetch real images if Google AI is the provider
+        // (since image generation is set up for Gemini)
+        if (aiProvider === 'googleai') {
+          fetchAndSetActivityImages(initialActivities);
+        }
       }
     } catch (error: any) {
       console.error(`Error fetching or processing AI suggestions from ${aiProvider}:`, error);
@@ -386,8 +419,8 @@ export default function WanderSnapPage() {
             </Button>
           </div>
           <div className="text-xs text-muted-foreground text-center">
-            {aiProvider === 'googleai' && 'Ensure GOOGLE_API_KEY is set in your environment.'}
-            {aiProvider === 'ollama' && 'Ensure your local Ollama server is running (e.g., http://localhost:11434) and has the selected model (e.g., mistral).'}
+            {aiProvider === 'googleai' && 'Ensure GOOGLE_API_KEY is set. Image generation uses Google AI.'}
+            {aiProvider === 'ollama' && 'Ensure your local Ollama server is running (e.g., http://localhost:11434) and has the selected model (e.g., mistral). Image generation is currently only supported via Google AI.'}
           </div>
         </CardContent>
       </Card>
@@ -428,4 +461,3 @@ export default function WanderSnapPage() {
     </div>
   );
 }
-
