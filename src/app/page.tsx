@@ -129,6 +129,7 @@ const MOCK_ACTIVITIES: Activity[] = MOCK_ACTIVITIES_BASE.map(act => ({
 
 export default function WanderSnapPage() {
   const [location, setLocation] = useState<UserLocation | null>(null);
+  const [locationDisplayName, setLocationDisplayName] = useState<string | null>(null);
   const [mood, setMood] = useState<string | undefined>(undefined);
   const [timeAvailable, setTimeAvailable] = useState<string | undefined>(undefined);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -140,19 +141,54 @@ export default function WanderSnapPage() {
 
   const handleDetectLocation = () => {
     setIsLoadingLocation(true);
+    setLocationDisplayName(null); // Reset display name on new detection attempt
     setUserInteracted(true);
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setLocation({
+        async (position) => {
+          const newLocation = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
-          });
-          setIsLoadingLocation(false);
-          toast({ title: 'Location detected!', description: 'Ready to find activities.' });
+          };
+          setLocation(newLocation);
+          toast({ title: 'Coordinates detected!', description: 'Fetching location name...' });
+
+          try {
+            // Fetch location name from Nominatim
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${newLocation.lat}&lon=${newLocation.lng}&accept-language=en`
+            );
+            if (!response.ok) {
+              // Don't throw an error that stops everything, just log and set a fallback
+              console.error(`Nominatim HTTP error! status: ${response.status}`);
+              setLocationDisplayName('Nearby Area');
+              toast({
+                title: 'Location Name Info',
+                description: 'Could not fetch specific place name, but coordinates are set.',
+                variant: 'default',
+              });
+            } else {
+              const data = await response.json();
+              const name = data.address?.city || data.address?.town || data.address?.village || data.address?.county || data.display_name?.split(',')[0]?.trim() || 'Unknown Location';
+              setLocationDisplayName(name);
+              toast({ title: 'Location Identified!', description: name });
+            }
+          } catch (geoError) {
+            console.error('Error fetching location name:', geoError);
+            setLocationDisplayName('Nearby Area'); // Fallback name
+            toast({
+              title: 'Location Name Error',
+              description: 'Could not fetch place name, but coordinates are set.',
+              variant: 'default',
+            });
+          } finally {
+            setIsLoadingLocation(false);
+          }
         },
         (error) => {
           console.error('Error getting location:', error);
+          setLocation(null); // Clear location if detection fails
           setIsLoadingLocation(false);
           toast({
             title: 'Location Error',
@@ -188,11 +224,8 @@ export default function WanderSnapPage() {
     setIsLoadingActivities(true);
     setActivities([]); // Clear previous activities
 
-    // Simulate filtering or fetching based on location (currently uses all mock activities)
-    // In a real app, you'd filter MOCK_ACTIVITIES or call an API with location data.
-
     try {
-      const activitiesToSummarize = MOCK_ACTIVITIES; // Using all mock activities for now
+      const activitiesToSummarize = MOCK_ACTIVITIES; 
       const summarizedActivities = await Promise.all(
         activitiesToSummarize.map(async (activity) => {
           try {
@@ -218,7 +251,6 @@ export default function WanderSnapPage() {
     }
   };
   
-  // Effect to show a welcome message or prompt for location if no interaction yet
   useEffect(() => {
     if (!userInteracted && !location) {
        // Optionally, prompt user or auto-detect location here after a delay
@@ -230,7 +262,7 @@ export default function WanderSnapPage() {
     <div className="container mx-auto px-4 py-8 min-h-screen flex flex-col">
       <header className="text-center py-8">
         <div className="inline-flex items-center justify-center mb-4">
-           <Heart className="w-16 h-16 text-primary" /> {/* Replaced generic logo with a relevant icon */}
+           <Heart className="w-16 h-16 text-primary" />
         </div>
         <h1 className="text-5xl font-bold text-primary tracking-tight">WanderSnap</h1>
         <p className="text-lg text-muted-foreground mt-2">Discover your next adventure, instantly.</p>
@@ -249,11 +281,26 @@ export default function WanderSnapPage() {
                 variant="outline"
               >
                 {isLoadingLocation ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Detecting...
+                  </>
+                ) : locationDisplayName ? (
+                  <>
+                    <MapPin className="mr-2 h-4 w-4" />
+                    {locationDisplayName}
+                  </>
+                ) : location ? (
+                  <>
+                    <LocateFixed className="mr-2 h-4 w-4" />
+                    Coordinates Detected
+                  </>
                 ) : (
-                  <LocateFixed className="mr-2 h-4 w-4" />
+                  <>
+                    <LocateFixed className="mr-2 h-4 w-4" />
+                    Detect My Location
+                  </>
                 )}
-                {location ? 'Location Detected' : 'Detect My Location'}
               </Button>
             </div>
 
