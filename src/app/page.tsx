@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ActivityCard } from '@/components/activity-card';
 import { useToast } from '@/hooks/use-toast';
 import { suggestActivities, type ActivitySuggestion } from '@/ai/flows/suggest-activities-flow';
-import { generateActivityImage, type GenerateActivityImageOutput } from '@/ai/flows/generate-activity-image-flow';
+// Removed import for generateActivityImage as it's no longer used
 import {
   LocateFixed,
   Loader2,
@@ -72,33 +72,6 @@ const mapCategoryToIcon = (categoryName?: string): LucideIcon => {
   if (lowerCategory.includes('education') || lowerCategory.includes('learn') || lowerCategory.includes('knowledge')) return Library;
   return Building; // Default icon
 };
-
-const categoryPlaceholderColors: { [key: string]: string } = {
-  'food': 'FACC15', 
-  'outdoors': '4ADE80',
-  'arts': 'A78BFA',
-  'relaxation': '60A5FA',
-  'adventure': 'FB923C',
-  'shopping': 'F472B6',
-  'sightseeing': '38BDF8',
-  'entertainment': 'EC4899',
-  'sports': '22D3EE',
-  'wellness': '34D399',
-  'educational': 'F59E0B',
-  'default': '9CA3AF'
-};
-
-const getCategoryPlaceholderColor = (categoryName?: string): string => {
-  const lowerCategory = categoryName?.toLowerCase() || '';
-  for (const key in categoryPlaceholderColors) {
-    if (key === 'default') continue;
-    if (lowerCategory.includes(key)) {
-      return categoryPlaceholderColors[key];
-    }
-  }
-  return categoryPlaceholderColors['default'];
-};
-
 
 export default function WanderSnapPage() {
   const [location, setLocation] = useState<UserLocation | null>(null);
@@ -195,32 +168,6 @@ export default function WanderSnapPage() {
     }
   };
 
-  const fetchAndSetActivityImages = async (currentActivities: Activity[]) => {
-    currentActivities.forEach(async (activity, index) => {
-      if (activity.dataAiHint && aiProvider === 'googleai') { // Only generate images if Google AI is selected for now
-        try {
-          console.log(`Requesting image for: ${activity.name} with hint: ${activity.dataAiHint}`);
-          const imageOutput: GenerateActivityImageOutput = await generateActivityImage({ keywords: activity.dataAiHint });
-          if (imageOutput.imageDataUri) {
-            setActivities(prevActivities => {
-              const newActivities = [...prevActivities];
-              // Ensure the activity still exists at this index (e.g. user hasn't made a new search)
-              if (newActivities[index] && newActivities[index].id === activity.id) {
-                newActivities[index] = { ...newActivities[index], photoUrl: imageOutput.imageDataUri };
-              }
-              return newActivities;
-            });
-          } else {
-            console.warn(`No image data URI returned for ${activity.name}`);
-          }
-        } catch (imgError) {
-          console.error(`Failed to generate image for '${activity.name}' with keywords '${activity.dataAiHint}':`, imgError);
-          // Image will remain the placeholder
-        }
-      }
-    });
-  };
-
   const handleFindActivities = async () => {
     if (!location && !locationDisplayName) {
       toast({ title: 'Missing Location', description: 'Please detect your location first.', variant: 'destructive' });
@@ -257,15 +204,15 @@ export default function WanderSnapPage() {
         toast({ title: 'No Suggestions', description: `The AI (${aiProviderOptions.find(opt => opt.value === aiProvider)?.label}) couldn't find any suggestions. Try different options or check the AI provider setup.` });
         setActivities([]);
       } else {
-        const initialActivities: Activity[] = aiOutput.suggestions.map((sugg: ActivitySuggestion) => {
+        const processedActivities: Activity[] = aiOutput.suggestions.map((sugg: ActivitySuggestion) => {
           let hint = sugg.imageKeywords;
           if (!hint) {
             hint = `${sugg.category.toLowerCase()} ${sugg.name.split(' ')[0].toLowerCase()}`;
           }
           const finalHint = hint.trim().replace(/[^a-zA-Z0-9\s]/g, '').split(/\s+/).slice(0, 2).join(' ').toLowerCase();
           
-          const categoryColor = getCategoryPlaceholderColor(sugg.category);
-          const photoUrl = `https://placehold.co/600x400/${categoryColor}/000000.png`;
+          // Use Unsplash Source for actual images based on keywords
+          const photoUrl = `https://source.unsplash.com/600x400/?${encodeURIComponent(finalHint || 'adventure')}`;
 
           return {
             id: crypto.randomUUID(),
@@ -280,13 +227,7 @@ export default function WanderSnapPage() {
             estimatedDuration: sugg.estimatedDuration,
           };
         });
-        setActivities(initialActivities); // Display activities with placeholders first
-
-        // Asynchronously fetch real images if Google AI is the provider
-        // (since image generation is set up for Gemini)
-        if (aiProvider === 'googleai') {
-          fetchAndSetActivityImages(initialActivities);
-        }
+        setActivities(processedActivities);
       }
     } catch (error: any) {
       console.error(`Error fetching or processing AI suggestions from ${aiProvider}:`, error);
@@ -419,8 +360,8 @@ export default function WanderSnapPage() {
             </Button>
           </div>
           <div className="text-xs text-muted-foreground text-center">
-            {aiProvider === 'googleai' && 'Ensure GOOGLE_API_KEY is set. Image generation uses Google AI.'}
-            {aiProvider === 'ollama' && 'Ensure your local Ollama server is running (e.g., http://localhost:11434) and has the selected model (e.g., mistral). Image generation is currently only supported via Google AI.'}
+            {aiProvider === 'googleai' && 'Ensure GOOGLE_API_KEY is set.'}
+            {aiProvider === 'ollama' && 'Ensure your local Ollama server is running (e.g., http://localhost:11434) and has the selected model (e.g., mistral).'}
           </div>
         </CardContent>
       </Card>
