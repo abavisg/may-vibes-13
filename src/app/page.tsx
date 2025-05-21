@@ -72,6 +72,32 @@ const mapCategoryToIcon = (categoryName?: string): LucideIcon => {
   return Building; // Default icon
 };
 
+const categoryPlaceholderColors: { [key: string]: string } = {
+  'food': 'FACC15', 
+  'outdoors': '4ADE80',
+  'arts': 'A78BFA',
+  'relaxation': '60A5FA',
+  'adventure': 'FB923C',
+  'shopping': 'F472B6',
+  'sightseeing': '38BDF8',
+  'entertainment': 'EC4899',
+  'sports': '22D3EE',
+  'wellness': '34D399',
+  'educational': 'F59E0B',
+  'default': '9CA3AF'
+};
+
+const getCategoryPlaceholderColor = (categoryName?: string): string => {
+  const lowerCategory = categoryName?.toLowerCase() || '';
+  for (const key in categoryPlaceholderColors) {
+    if (key === 'default') continue;
+    if (lowerCategory.includes(key)) {
+      return categoryPlaceholderColors[key];
+    }
+  }
+  return categoryPlaceholderColors['default'];
+};
+
 
 export default function WanderSnapPage() {
   const [location, setLocation] = useState<UserLocation | null>(null);
@@ -209,15 +235,17 @@ export default function WanderSnapPage() {
           if (!hint) {
             hint = `${sugg.category.toLowerCase()} ${sugg.name.split(' ')[0].toLowerCase()}`;
           }
-          // Ensure hint is max 2 words and clean it up
           const finalHint = hint.trim().replace(/[^a-zA-Z0-9\s]/g, '').split(/\s+/).slice(0, 2).join(' ').toLowerCase();
           
+          const categoryColor = getCategoryPlaceholderColor(sugg.category);
+          const photoUrl = `https://placehold.co/600x400/${categoryColor}/000000.png`; // Use black for text color on placeholder
+
           return {
             id: crypto.randomUUID(),
             name: sugg.name,
             description: sugg.description,
-            photoUrl: 'https://placehold.co/600x400.png', 
-            dataAiHint: finalHint || 'activity discovery', // Fallback if all else fails
+            photoUrl: photoUrl, 
+            dataAiHint: finalHint || 'activity discovery',
             location: location || undefined, 
             locationHint: sugg.locationHint,
             category: sugg.category,
