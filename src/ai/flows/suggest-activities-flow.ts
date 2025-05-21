@@ -23,14 +23,14 @@ export type SuggestActivitiesInput = z.infer<typeof SuggestActivitiesInputSchema
 const ActivitySuggestionSchema = z.object({
   name: z.string().describe('The concise and catchy name of the suggested activity.'),
   description: z.string().describe("An engaging, user-facing description of the activity (2-3 sentences), tailored to the user's mood and time. Highlight what makes it suitable."),
-  category: z.string().describe('A category for the activity. Choose from: Food, Outdoors, Arts, Relaxation, Adventure, Shopping, Sightseeing, Entertainment, Sports, Wellness.'),
+  category: z.string().describe('A category for the activity. Choose from: Food, Outdoors, Arts, Relaxation, Adventure, Shopping, Sightseeing, Entertainment, Sports, Wellness, Educational.'),
   estimatedDuration: z.string().describe("An estimated duration for the activity (e.g., 'approx. 45 minutes', '1-2 hours'), ensuring it fits within the user's 'timeAvailable'."),
   locationHint: z.string().describe('A brief, general hint about where this type of activity might be found or its setting (e.g., "a local park", "a cozy cafe in the main street", "the museum district", "anywhere with a good view").'),
 });
 export type ActivitySuggestion = z.infer<typeof ActivitySuggestionSchema>;
 
 const SuggestActivitiesOutputSchema = z.object({
-  suggestions: z.array(ActivitySuggestionSchema).min(1).max(5).describe('A list of 1 to 5 tailored activity suggestions.'),
+  suggestions: z.array(ActivitySuggestionSchema).min(1).max(10).describe('A list of 1 to 10 tailored activity suggestions.'),
 });
 export type SuggestActivitiesOutput = z.infer<typeof SuggestActivitiesOutputSchema>;
 
@@ -44,7 +44,7 @@ const suggestActivitiesPrompt = ai.definePrompt({
   input: {schema: SuggestActivitiesInputSchema},
   output: {schema: SuggestActivitiesOutputSchema},
   prompt: `You are WanderSnap, a friendly and creative AI assistant helping users discover activities.
-Based on the user's location context, mood, available time, and preferences, generate 3 to 5 diverse and engaging activity suggestions.
+Based on the user's location context, mood, available time, and preferences, generate 5 to 10 diverse and engaging activity suggestions.
 
 User's Location Context: {{{locationContext}}}
 User's Mood: {{{mood}}}
@@ -54,7 +54,7 @@ Time Available: {{{timeAvailable}}}
 For each suggestion, provide:
 - A catchy 'name'.
 - A 'description' (2-3 sentences) that's engaging and tailored to their mood and time.
-- A 'category' from the following list: Food, Outdoors, Arts, Relaxation, Adventure, Shopping, Sightseeing, Entertainment, Sports, Wellness.
+- A 'category' from the following list: Food, Outdoors, Arts, Relaxation, Adventure, Shopping, Sightseeing, Entertainment, Sports, Wellness, Educational.
 - An 'estimatedDuration' that fits within their 'timeAvailable'.
 - A general 'locationHint' (e.g., "a bustling market area", "a quiet riverside path").
 
@@ -67,7 +67,7 @@ Example of a single suggestion object structure:
   "estimatedDuration": "approx. 1 hour",
   "locationHint": "a secluded spot in the city park"
 }
-Provide between 1 and 5 suggestions.
+Provide between 5 and 10 suggestions.
 `,
 });
 
@@ -91,3 +91,4 @@ const suggestActivitiesFlow = ai.defineFlow(
     return output;
   }
 );
+
