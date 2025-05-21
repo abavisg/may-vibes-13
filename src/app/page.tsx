@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -252,7 +253,7 @@ export default function WanderSnapPage() {
                 ) : (
                   <LocateFixed className="mr-2 h-4 w-4" />
                 )}
-                {location ? `Lat: ${location.lat.toFixed(2)}, Lng: ${location.lng.toFixed(2)}` : 'Detect My Location'}
+                {location ? 'Location Detected' : 'Detect My Location'}
               </Button>
             </div>
 
