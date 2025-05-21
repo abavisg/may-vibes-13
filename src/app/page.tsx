@@ -28,6 +28,7 @@ import {
   Film, // For Entertainment
   Bike, // For Sports
   HeartPulse, // For Wellness
+  Library, // For Educational
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -37,6 +38,7 @@ const moodOptions: { value: string; label: string; icon: LucideIcon }[] = [
   { value: 'Adventurous', label: 'Adventurous', icon: MountainSnow },
   { value: 'Curious', label: 'Curious', icon: Search },
   { value: 'Energetic', label: 'Energetic', icon: Zap },
+  { value: 'Educational', label: 'Educational', icon: Library },
 ];
 
 const timeOptions: { value: string; label: string }[] = [
@@ -59,6 +61,7 @@ const mapCategoryToIcon = (categoryName?: string): LucideIcon => {
   if (lowerCategory.includes('entertain') || lowerCategory.includes('movie') || lowerCategory.includes('show') || lowerCategory.includes('game')) return Film;
   if (lowerCategory.includes('sport') || lowerCategory.includes('active') || lowerCategory.includes('fitness')) return Bike;
   if (lowerCategory.includes('wellnes') || lowerCategory.includes('health') || lowerCategory.includes('spa')) return HeartPulse;
+  if (lowerCategory.includes('education') || lowerCategory.includes('learn') || lowerCategory.includes('knowledge')) return Library;
   return Building; // Default icon
 };
 
@@ -335,3 +338,4 @@ export default function WanderSnapPage() {
     </div>
   );
 }
+
