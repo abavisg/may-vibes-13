@@ -204,18 +204,27 @@ export default function WanderSnapPage() {
         toast({ title: 'No Suggestions', description: `The AI (${aiProviderOptions.find(opt => opt.value === aiProvider)?.label}) couldn't find any suggestions. Try different options or check the AI provider setup.` });
         setActivities([]);
       } else {
-        const newActivities: Activity[] = aiOutput.suggestions.map((sugg: ActivitySuggestion) => ({
-          id: crypto.randomUUID(),
-          name: sugg.name,
-          description: sugg.description,
-          photoUrl: 'https://placehold.co/600x400.png', 
-          dataAiHint: `${sugg.category.toLowerCase()} ${sugg.name.split(' ')[0].toLowerCase()}`,
-          location: location || undefined, 
-          locationHint: sugg.locationHint,
-          category: sugg.category,
-          categoryIcon: mapCategoryToIcon(sugg.category),
-          estimatedDuration: sugg.estimatedDuration,
-        }));
+        const newActivities: Activity[] = aiOutput.suggestions.map((sugg: ActivitySuggestion) => {
+          let hint = sugg.imageKeywords;
+          if (!hint) {
+            hint = `${sugg.category.toLowerCase()} ${sugg.name.split(' ')[0].toLowerCase()}`;
+          }
+          // Ensure hint is max 2 words and clean it up
+          const finalHint = hint.trim().replace(/[^a-zA-Z0-9\s]/g, '').split(/\s+/).slice(0, 2).join(' ').toLowerCase();
+          
+          return {
+            id: crypto.randomUUID(),
+            name: sugg.name,
+            description: sugg.description,
+            photoUrl: 'https://placehold.co/600x400.png', 
+            dataAiHint: finalHint || 'activity discovery', // Fallback if all else fails
+            location: location || undefined, 
+            locationHint: sugg.locationHint,
+            category: sugg.category,
+            categoryIcon: mapCategoryToIcon(sugg.category),
+            estimatedDuration: sugg.estimatedDuration,
+          };
+        });
         setActivities(newActivities);
       }
     } catch (error: any) {
@@ -227,6 +236,8 @@ export default function WanderSnapPage() {
         errorMessage += ` Details: ${error.message}.`;
         if (aiProvider === 'ollama' && error.message.toLowerCase().includes('fetch failed')) {
           errorMessage += ` Please ensure your local Ollama server is running and accessible (e.g. at http://localhost:11434).`;
+        } else if (aiProvider === 'ollama' && error.message.toLowerCase().includes('ollama output did not match the expected schema')) {
+          errorMessage += ` The local AI's response was not in the correct format. This might be a model compatibility issue.`;
         } else {
           errorMessage += ` Please check your setup and try again.`;
         }

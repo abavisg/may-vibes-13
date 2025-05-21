@@ -28,6 +28,7 @@ const ActivitySuggestionSchema = z.object({
   category: z.string().describe('A category for the activity. Choose from: Food, Outdoors, Arts, Relaxation, Adventure, Shopping, Sightseeing, Entertainment, Sports, Wellness, Educational.'),
   estimatedDuration: z.string().describe("An estimated duration for the activity (e.g., 'approx. 45 minutes', '1-2 hours'), ensuring it fits within the user's 'timeAvailable'."),
   locationHint: z.string().describe('A brief, general hint about where this type of activity might be found or its setting (e.g., "a local park", "a cozy cafe in the main street", "the museum district", "anywhere with a good view").'),
+  imageKeywords: z.string().describe('One or two keywords for an image search (e.g., "mountain hike", "city cafe"). Max 2 words.').refine(val => val.split(' ').length <= 2, { message: "Image keywords must be one or two words."}).optional(),
 });
 export type ActivitySuggestion = z.infer<typeof ActivitySuggestionSchema>;
 
@@ -63,6 +64,7 @@ For each suggestion, provide:
 - A 'category' from the following list: Food, Outdoors, Arts, Relaxation, Adventure, Shopping, Sightseeing, Entertainment, Sports, Wellness, Educational.
 - An 'estimatedDuration' that fits within their 'timeAvailable'.
 - A general 'locationHint' (e.g., "a bustling market area", "a quiet riverside path").
+- 'imageKeywords': One or two keywords for a representative image (e.g., "serene beach", "bustling market").
 
 Return your suggestions as a JSON object with a single key "suggestions", where "suggestions" is an array of objects, each matching the ActivitySuggestion schema. Ensure the JSON is valid.
 Example of a single suggestion object structure:
@@ -71,7 +73,8 @@ Example of a single suggestion object structure:
   "description": "Unwind and find tranquility in this hidden gem. Perfect for a {{{mood}}} moment, you can easily spend {{{timeAvailable}}} discovering its beauty.",
   "category": "Outdoors",
   "estimatedDuration": "approx. 1 hour",
-  "locationHint": "a secluded spot in the city park"
+  "locationHint": "a secluded spot in the city park",
+  "imageKeywords": "secret garden"
 }
 Provide between 5 and 10 suggestions. If no relevant suggestions are found, return an empty array for "suggestions". Ensure your entire response is a single, valid JSON object.
 `,
@@ -100,8 +103,9 @@ For each suggestion, you MUST provide:
 - 'category': Choose one: Food, Outdoors, Arts, Relaxation, Adventure, Shopping, Sightseeing, Entertainment, Sports, Wellness, Educational.
 - 'estimatedDuration': An estimated duration fitting 'timeAvailable'.
 - 'locationHint': A general hint about where this activity might be found.
+- 'imageKeywords': One or two keywords for a representative image (e.g., "forest path", "modern art").
 
-Your entire response MUST be a single, valid JSON object. The JSON object must have a single key "suggestions", and its value must be an array of suggestion objects (or an empty array if no suggestions are found), where each suggestion object has the keys: "name", "description", "category", "estimatedDuration", and "locationHint".
+Your entire response MUST be a single, valid JSON object. The JSON object must have a single key "suggestions", and its value must be an array of suggestion objects (or an empty array if no suggestions are found), where each suggestion object has the keys: "name", "description", "category", "estimatedDuration", "locationHint", and "imageKeywords".
 Do NOT include any text outside of this JSON object.
 
 Example of a single suggestion object structure:
@@ -110,7 +114,8 @@ Example of a single suggestion object structure:
   "description": "An example description.",
   "category": "Example Category",
   "estimatedDuration": "approx. 1 hour",
-  "locationHint": "An example location hint."
+  "locationHint": "An example location hint.",
+  "imageKeywords": "example activity"
 }
 `;
 
@@ -149,13 +154,28 @@ Example of a single suggestion object structure:
           parsedOutput = JSON.parse(suggestionsJsonString);
         } catch (e: any) {
           console.error('Failed to parse JSON from Ollama response string:', suggestionsJsonString, e);
-          throw new Error(`Ollama returned data that is not valid JSON. Details: ${e.message}`);
+          // Attempt to clean the string if it's a common issue like being wrapped in markdown
+          let cleanedString = suggestionsJsonString.trim();
+          if (cleanedString.startsWith('```json')) {
+            cleanedString = cleanedString.substring(7);
+          }
+          if (cleanedString.endsWith('```')) {
+            cleanedString = cleanedString.substring(0, cleanedString.length - 3);
+          }
+          try {
+            parsedOutput = JSON.parse(cleanedString);
+          } catch (e2: any) {
+            console.error('Failed to parse JSON even after cleaning:', cleanedString, e2);
+            throw new Error(`Ollama returned data that is not valid JSON. Details: ${e.message}`);
+          }
         }
         
         // Validate the parsed output against our Zod schema
         const validationResult = SuggestActivitiesOutputSchema.safeParse(parsedOutput);
         if (!validationResult.success) {
           console.error('Ollama output failed Zod validation:', validationResult.error.flatten());
+          // Log the problematic data
+          console.error('Problematic Ollama output (parsed):', parsedOutput);
           throw new Error(`Ollama output did not match the expected schema. Issues: ${validationResult.error.message}`);
         }
         return validationResult.data;
@@ -180,7 +200,7 @@ Example of a single suggestion object structure:
 
       const {output} = await suggestActivitiesPrompt(promptInputData, { model: modelToUse });
 
-      if (!output) { // Schema now allows empty suggestions array, so output can be {suggestions: []}
+      if (!output) { 
         console.warn(`AI (${input.aiProvider} using ${modelToUse}) did not return a valid output structure, returning empty array.`);
         return { suggestions: [] };
       }
@@ -188,3 +208,4 @@ Example of a single suggestion object structure:
     }
   }
 );
+
