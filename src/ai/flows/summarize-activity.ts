@@ -1,7 +1,9 @@
+
 'use server';
 
 /**
  * @fileOverview Summarizes activity descriptions based on mood and time constraints.
+ * THIS FLOW IS CURRENTLY NOT USED IN THE MAIN PATH but kept for potential future use.
  *
  * - summarizeActivity - A function that summarizes activity descriptions.
  * - SummarizeActivityInput - The input type for the summarizeActivity function.
@@ -13,14 +15,14 @@ import {z} from 'genkit';
 
 const SummarizeActivityInputSchema = z.object({
   activityDescription: z.string().describe('The detailed description of the activity.'),
-  mood: z.string().describe('The user\'s current mood.'),
-  timeAvailable: z.string().describe('The time the user has available (e.g., \'30 minutes\', \'2 hours\').'),
-  preferences: z.string().optional().describe('The user\'s known preferences.'),
+  mood: z.string().describe("The user's current mood."),
+  timeAvailable: z.string().describe("The time the user has available (e.g., '30 minutes', '2 hours')."),
+  preferences: z.string().optional().describe("The user's known preferences."),
 });
 export type SummarizeActivityInput = z.infer<typeof SummarizeActivityInputSchema>;
 
 const SummarizeActivityOutputSchema = z.object({
-  summary: z.string().describe('A concise and engaging summary of the activity tailored to the user\'s mood, time constraints, and preferences.'),
+  summary: z.string().describe("A concise and engaging summary of the activity tailored to the user's mood, time constraints, and preferences."),
 });
 export type SummarizeActivityOutput = z.infer<typeof SummarizeActivityOutputSchema>;
 
@@ -32,15 +34,16 @@ const summarizeActivityPrompt = ai.definePrompt({
   name: 'summarizeActivityPrompt',
   input: {schema: SummarizeActivityInputSchema},
   output: {schema: SummarizeActivityOutputSchema},
-  prompt: `You are an AI assistant designed to provide concise and engaging summaries of activities, tailored to the user\'s current mood, available time, and known preferences.
+  prompt: `You are an AI assistant designed to provide concise and engaging summaries of activities, tailored to the user's current mood, available time, and known preferences.
 
   Given the following activity description, mood, time constraints, and preferences, generate a summary that helps the user quickly decide if the activity is suitable for them.
 
   Activity Description: {{{activityDescription}}}
   Mood: {{{mood}}}
   Time Available: {{{timeAvailable}}}
-  Preferences: {{#if preferences}}{{{preferences}}}{{else}}None{{/if}}
+  Preferences: {{#if preferences}}{{{preferences}}}{{else}}None specified{{/if}}
 
+  Generate a compelling summary.
   Summary:`,
 });
 
