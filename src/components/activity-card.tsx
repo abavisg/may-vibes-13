@@ -3,7 +3,7 @@ import Image from 'next/image';
 import type { Activity } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Clock, MapPin, Search as SearchIcon } from 'lucide-react'; // Added Clock and SearchIcon
+import { Clock, MapPin, Search as SearchIcon, ExternalLink } from 'lucide-react';
 
 interface ActivityCardProps {
   activity: Activity;
@@ -22,7 +22,12 @@ export function ActivityCard({ activity, locationDisplayName }: ActivityCardProp
     } else if (activity.name) { // Fallback to general Google search with name only
       window.open(`https://www.google.com/search?q=${encodeURIComponent(activity.name)}`, '_blank');
     }
-    // If none of the above, button would be disabled or not shown based on logic below
+  };
+
+  const handleLearnMore = () => {
+    const locationContextForSearch = locationDisplayName || activity.locationHint || "";
+    const searchQuery = `"${activity.name}" ${locationContextForSearch} official website OR tickets OR reservations OR booking`;
+    window.open(`https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`, '_blank');
   };
 
   const IconComponent = activity.categoryIcon;
@@ -63,14 +68,22 @@ export function ActivityCard({ activity, locationDisplayName }: ActivityCardProp
           </div>
         )}
       </CardContent>
-      <CardFooter className="p-4 pt-2">
-        <Button 
-          onClick={handleGetDirectionsOrSearch} 
-          className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
+      <CardFooter className="p-4 pt-2 flex flex-col sm:flex-row gap-2">
+        <Button
+          onClick={handleGetDirectionsOrSearch}
+          className="w-full sm:flex-1 bg-accent hover:bg-accent/90 text-accent-foreground"
           disabled={!canGetDirectionsOrSearch}
         >
           {activity.location ? <MapPin className="mr-2 h-4 w-4" /> : <SearchIcon className="mr-2 h-4 w-4" />}
-          {activity.location ? 'Get Directions' : (activity.name && (locationDisplayName || activity.locationHint)) ? 'Find on Map / Search' : 'More Info'}
+          {activity.location ? 'Get Directions' : (activity.name && (locationDisplayName || activity.locationHint)) ? 'Find on Map' : 'Search Online'}
+        </Button>
+        <Button
+          onClick={handleLearnMore}
+          variant="outline"
+          className="w-full sm:flex-1"
+        >
+          <ExternalLink className="mr-2 h-4 w-4" />
+          Learn More
         </Button>
       </CardFooter>
     </Card>
