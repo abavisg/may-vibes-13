@@ -32,7 +32,7 @@ const ActivitySuggestionSchema = z.object({
 export type ActivitySuggestion = z.infer<typeof ActivitySuggestionSchema>;
 
 const SuggestActivitiesOutputSchema = z.object({
-  suggestions: z.array(ActivitySuggestionSchema).min(1).max(10).describe('A list of 1 to 10 tailored activity suggestions.'),
+  suggestions: z.array(ActivitySuggestionSchema).max(10).describe('A list of 0 to 10 tailored activity suggestions.'),
 });
 export type SuggestActivitiesOutput = z.infer<typeof SuggestActivitiesOutputSchema>;
 
@@ -50,7 +50,7 @@ const suggestActivitiesPrompt = ai.definePrompt({
   input: {schema: PromptDirectInputSchema},
   output: {schema: SuggestActivitiesOutputSchema},
   prompt: `You are WanderSnap, a friendly and creative AI assistant helping users discover activities.
-Based on the user's location context, mood, available time, and preferences, generate 5 to 10 diverse and engaging activity suggestions.
+Based on the user's location context, mood, available time, and preferences, generate 5 to 10 diverse and engaging activity suggestions. If no suitable activities can be found, it is acceptable to return an empty list of suggestions.
 
 User's Location Context: {{{locationContext}}}
 User's Mood: {{{mood}}}
@@ -73,7 +73,7 @@ Example of a single suggestion object structure:
   "estimatedDuration": "approx. 1 hour",
   "locationHint": "a secluded spot in the city park"
 }
-Provide between 5 and 10 suggestions. Ensure your entire response is a single, valid JSON object.
+Provide between 5 and 10 suggestions. If no relevant suggestions are found, return an empty array for "suggestions". Ensure your entire response is a single, valid JSON object.
 `,
 });
 
@@ -88,7 +88,7 @@ const suggestActivitiesFlow = ai.defineFlow(
       console.log("Attempting to use Ollama directly.");
       const ollamaModel = 'mistral'; // Or make this configurable
       const ollamaPrompt = `You are WanderSnap, a friendly and creative AI assistant.
-Generate between 5 and 10 diverse activity suggestions based on the following user inputs.
+Generate between 5 and 10 diverse activity suggestions based on the following user inputs. If no suitable activities can be found, return an empty array for "suggestions".
 User's Location Context: ${input.locationContext}
 User's Mood: ${input.mood}
 Time Available: ${input.timeAvailable}
@@ -101,7 +101,7 @@ For each suggestion, you MUST provide:
 - 'estimatedDuration': An estimated duration fitting 'timeAvailable'.
 - 'locationHint': A general hint about where this activity might be found.
 
-Your entire response MUST be a single, valid JSON object. The JSON object must have a single key "suggestions", and its value must be an array of suggestion objects, where each suggestion object has the keys: "name", "description", "category", "estimatedDuration", and "locationHint".
+Your entire response MUST be a single, valid JSON object. The JSON object must have a single key "suggestions", and its value must be an array of suggestion objects (or an empty array if no suggestions are found), where each suggestion object has the keys: "name", "description", "category", "estimatedDuration", and "locationHint".
 Do NOT include any text outside of this JSON object.
 
 Example of a single suggestion object structure:
@@ -160,10 +160,9 @@ Example of a single suggestion object structure:
           throw new Error('Ollama output did not match the expected schema.');
         }
 
-        if (!validationResult.data || !validationResult.data.suggestions || validationResult.data.suggestions.length === 0) {
-            console.warn(`Ollama (direct call using ${ollamaModel}) did not return valid suggestions, returning empty array.`);
-            return { suggestions: [] };
-        }
+        // No need to check validationResult.data.suggestions.length === 0 here,
+        // as the schema now allows an empty array.
+        // The UI will handle the "no suggestions" case.
         return validationResult.data;
 
       } catch (error) {
@@ -187,8 +186,8 @@ Example of a single suggestion object structure:
 
       const {output} = await suggestActivitiesPrompt(promptInputData, { model: modelToUse });
 
-      if (!output || !output.suggestions || output.suggestions.length === 0) {
-        console.warn(`AI (${input.aiProvider} using ${modelToUse}) did not return valid suggestions, returning empty array.`);
+      if (!output) { // Schema now allows empty suggestions array, so output can be {suggestions: []}
+        console.warn(`AI (${input.aiProvider} using ${modelToUse}) did not return a valid output structure, returning empty array.`);
         return { suggestions: [] };
       }
       return output;
@@ -205,3 +204,4 @@ const toast = (options: { title: string; description: string; variant?: 'destruc
   // This would typically be handled by returning an error/status that the client interprets.
   console.warn(`SERVER TOAST: ${options.title} - ${options.description}`);
 };
+
