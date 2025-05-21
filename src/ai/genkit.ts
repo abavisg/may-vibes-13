@@ -1,17 +1,17 @@
 
 import {genkit} from 'genkit';
 import {googleAI} from '@genkit-ai/googleai';
-// import {ollama} from '@genkit-ai/ollama'; // Ensure this is commented out or removed if calling Ollama directly
+// import {ollama} from '@genkit-ai/ollama'; // Ensure this is commented out if its package is not installed or if using direct fetch
 
 export const ai = genkit({
   plugins: [
     googleAI({
       // Genkit will automatically look for GOOGLE_API_KEY in process.env
     }),
-    // ollama({ // Ensure this is commented out or removed if calling Ollama directly
+    // ollama({ // Keep this commented out if @genkit-ai/ollama package fails to install
     //   // Ensure your Ollama server is running, typically at http://localhost:11434
     //   // You can specify serverAddress and defaultModel if needed, e.g.:
-    //   serverAddress: 'http://127.0.0.1:11434',
+    //   serverAddress: 'http://127.0.0.1:11434', // Default if not specified by Genkit's Ollama plugin
     //   defaultModel: 'mistral', // Default model for Ollama, can be overridden in flows
     // }),
   ],
