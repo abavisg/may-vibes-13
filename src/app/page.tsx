@@ -29,8 +29,8 @@ import {
   Bike, 
   HeartPulse, 
   Library, 
-  Brain, // For AI Provider selection
-  Settings2, // Alternative for AI provider
+  Brain,
+  Settings2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -220,12 +220,20 @@ export default function WanderSnapPage() {
       }
     } catch (error: any) {
       console.error(`Error fetching or processing AI suggestions from ${aiProvider}:`, error);
-      let errorMessage = `Could not get suggestions from ${aiProviderOptions.find(opt => opt.value === aiProvider)?.label}.`;
+      const providerLabel = aiProviderOptions.find(opt => opt.value === aiProvider)?.label || aiProvider;
+      let errorMessage = `Could not get suggestions from ${providerLabel}.`;
+
       if (error.message) {
-        errorMessage += ` Details: ${error.message}`;
+        errorMessage += ` Details: ${error.message}.`;
+        if (aiProvider === 'ollama' && error.message.toLowerCase().includes('fetch failed')) {
+          errorMessage += ` Please ensure your local Ollama server is running and accessible (e.g. at http://localhost:11434).`;
+        } else {
+          errorMessage += ` Please check your setup and try again.`;
+        }
       } else {
-        errorMessage += ` Please check your setup and try again.`;
+        errorMessage += ` An unknown error occurred. Please check your setup and try again.`;
       }
+      
       toast({ 
         title: 'AI Suggestion Error', 
         description: errorMessage, 
