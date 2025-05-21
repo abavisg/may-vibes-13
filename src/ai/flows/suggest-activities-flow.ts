@@ -14,7 +14,7 @@ import {z} from 'genkit';
 import type { AiProvider } from '@/types';
 
 const SuggestActivitiesInputSchema = z.object({
-  locationContext: z.string().describe("The user's current general location or area name (e.g., 'downtown San Francisco', 'near the beach', 'my current area')."),
+  locationContext: z.string().describe("The user's current general location or area name (e.g., 'downtown San Francisco', 'near the beach', 'my current area'). This should be specific enough for the AI to find real places."),
   mood: z.string().describe("The user's current mood (e.g., 'Adventurous', 'Relaxed', 'Curious')."),
   timeAvailable: z.string().describe("The time the user has available (e.g., '30 minutes', '1 hour', 'half-day')."),
   preferences: z.string().optional().describe("Any specific user preferences (e.g., 'prefers quiet places', 'loves history')."),
@@ -23,17 +23,17 @@ const SuggestActivitiesInputSchema = z.object({
 export type SuggestActivitiesInput = z.infer<typeof SuggestActivitiesInputSchema>;
 
 const ActivitySuggestionSchema = z.object({
-  name: z.string().describe('The concise and catchy name of the suggested activity.'),
-  description: z.string().describe("An engaging, user-facing description of the activity (2-3 sentences), tailored to the user's mood and time. Highlight what makes it suitable."),
+  name: z.string().describe('The name of a specific, real-world place or a very specific type of activity if a place name isn\'t feasible (e.g., "The Grand Art Museum", "Riverside Cycling Path", "Hidden Gem Bookstore").'),
+  description: z.string().describe("An engaging, user-facing description (2-3 sentences) of why this specific place or activity is a good suggestion, tailored to the user's mood and time."),
   category: z.string().describe('A category for the activity. Choose from: Food, Outdoors, Arts, Relaxation, Adventure, Shopping, Sightseeing, Entertainment, Sports, Wellness, Educational.'),
   estimatedDuration: z.string().describe("An estimated duration for the activity (e.g., 'approx. 45 minutes', '1-2 hours'), ensuring it fits within the user's 'timeAvailable'."),
-  locationHint: z.string().describe('A brief, general hint about where this type of activity might be found or its setting (e.g., "a local park", "a cozy cafe in the main street", "the museum district", "anywhere with a good view").'),
-  imageKeywords: z.string().describe('One or two keywords for an image search (e.g., "mountain hike", "city cafe"). Max 2 words.').refine(val => val.split(' ').length <= 2, { message: "Image keywords must be one or two words."}).optional(),
+  locationHint: z.string().describe('A brief hint about where this specific place or activity is located or its general area (e.g., "downtown arts district", "near the old harbor", "in the university quarter", "Elm Street, near the park").'),
+  imageKeywords: z.string().describe('One or two keywords for an image search, relevant to the specific place or activity (e.g., "grand museum facade", "riverside path autumn"). Max 2 words.').refine(val => val.split(' ').length <= 2, { message: "Image keywords must be one or two words."}).optional(),
 });
 export type ActivitySuggestion = z.infer<typeof ActivitySuggestionSchema>;
 
 const SuggestActivitiesOutputSchema = z.object({
-  suggestions: z.array(ActivitySuggestionSchema).max(10).describe('A list of 0 to 10 tailored activity suggestions.'),
+  suggestions: z.array(ActivitySuggestionSchema).max(10).describe('A list of 0 to 10 tailored activity suggestions, ideally naming specific places.'),
 });
 export type SuggestActivitiesOutput = z.infer<typeof SuggestActivitiesOutputSchema>;
 
@@ -50,31 +50,34 @@ const suggestActivitiesPrompt = ai.definePrompt({
   name: 'suggestActivitiesPrompt',
   input: {schema: PromptDirectInputSchema},
   output: {schema: SuggestActivitiesOutputSchema},
-  prompt: `You are WanderSnap, a friendly and creative AI assistant helping users discover activities.
-Based on the user's location context, mood, available time, and preferences, generate 5 to 10 diverse and engaging activity suggestions. If no suitable activities can be found, it is acceptable to return an empty list of suggestions.
+  prompt: `You are WanderSnap, a friendly and creative AI assistant helping users discover specific activities and places.
+Based on the user's location context, mood, available time, and preferences, generate 5 to 10 diverse and engaging activity suggestions.
+Crucially, try to suggest **specific, real-world places** (e.g., "The Local Grind Coffee Shop", "City Central Park", "Museum of Modern Art") rather than generic activities. If a specific place name isn't possible for a suggestion, provide a very specific type of activity (e.g., "Scenic Riverwalk Photography Session").
 
-User's Location Context: {{{locationContext}}}
+If no suitable specific places or activities can be found, it is acceptable to return an empty list of suggestions.
+
+User's Location Context: {{{locationContext}}} (Use this to find real places if possible)
 User's Mood: {{{mood}}}
 Time Available: {{{timeAvailable}}}
 {{#if preferences}}User's Preferences: {{{preferences}}}{{/if}}
 
 For each suggestion, provide:
-- A catchy 'name'.
-- A 'description' (2-3 sentences) that's engaging and tailored to their mood and time.
+- A 'name': The name of the specific place or highly specific activity.
+- A 'description' (2-3 sentences): Explain why this specific place/activity is a good suggestion, tailored to their mood and time.
 - A 'category' from the following list: Food, Outdoors, Arts, Relaxation, Adventure, Shopping, Sightseeing, Entertainment, Sports, Wellness, Educational.
 - An 'estimatedDuration' that fits within their 'timeAvailable'.
-- A general 'locationHint' (e.g., "a bustling market area", "a quiet riverside path").
-- 'imageKeywords': One or two keywords for a representative image (e.g., "serene beach", "bustling market").
+- A 'locationHint': A hint about where this specific place/activity is located (e.g., "123 Main St, Downtown", "Elmwood District, near the library", "waterfront area").
+- 'imageKeywords': One or two keywords for a representative image of the specific place/activity (e.g., "local grind coffee", "city park fountain", "modern art sculpture").
 
 Return your suggestions as a JSON object with a single key "suggestions", where "suggestions" is an array of objects, each matching the ActivitySuggestion schema. Ensure the JSON is valid.
 Example of a single suggestion object structure:
 {
-  "name": "Explore the Secret Garden",
-  "description": "Unwind and find tranquility in this hidden gem. Perfect for a {{{mood}}} moment, you can easily spend {{{timeAvailable}}} discovering its beauty.",
+  "name": "Explore the Whispering Pines Trail",
+  "description": "Perfect for your {{{mood}}} mood, this trail offers beautiful views and a refreshing atmosphere. You can complete a good section in {{{timeAvailable}}}.",
   "category": "Outdoors",
-  "estimatedDuration": "approx. 1 hour",
-  "locationHint": "a secluded spot in the city park",
-  "imageKeywords": "secret garden"
+  "estimatedDuration": "approx. 1.5 hours",
+  "locationHint": "North end of Redwood Park, entrance on Pine St.",
+  "imageKeywords": "pine trail"
 }
 Provide between 5 and 10 suggestions. If no relevant suggestions are found, return an empty array for "suggestions". Ensure your entire response is a single, valid JSON object.
 `,
@@ -91,31 +94,34 @@ const suggestActivitiesFlow = ai.defineFlow(
       console.log("Attempting to use Ollama directly.");
       const ollamaModel = 'mistral'; // Or make this configurable, e.g. 'llama3', 'tinyllama:latest' etc.
       const ollamaPrompt = `You are WanderSnap, a friendly and creative AI assistant.
-Generate between 5 and 10 diverse activity suggestions based on the following user inputs. If no suitable activities can be found, return an empty array for "suggestions".
-User's Location Context: ${input.locationContext}
+Generate between 5 and 10 diverse activity suggestions based on the following user inputs.
+Crucially, try to suggest **specific, real-world places** (e.g., "The Local Grind Coffee Shop", "City Central Park", "Museum of Modern Art") rather than generic activities. If a specific place name isn't possible for a suggestion, provide a very specific type of activity (e.g., "Scenic Riverwalk Photography Session").
+If no suitable specific places or activities can be found, return an empty array for "suggestions".
+
+User's Location Context: ${input.locationContext} (Use this to find real places if possible)
 User's Mood: ${input.mood}
 Time Available: ${input.timeAvailable}
 ${input.preferences ? `User's Preferences: ${input.preferences}` : ''}
 
 For each suggestion, you MUST provide:
-- 'name': A catchy name for the activity.
-- 'description': A 2-3 sentence engaging description, tailored to the mood and time.
+- 'name': The name of the specific place or highly specific activity.
+- 'description': A 2-3 sentence engaging description of why this specific place/activity is a good suggestion, tailored to the mood and time.
 - 'category': Choose one: Food, Outdoors, Arts, Relaxation, Adventure, Shopping, Sightseeing, Entertainment, Sports, Wellness, Educational.
 - 'estimatedDuration': An estimated duration fitting 'timeAvailable'.
-- 'locationHint': A general hint about where this activity might be found.
-- 'imageKeywords': One or two keywords for a representative image (e.g., "forest path", "modern art").
+- 'locationHint': A hint about where this specific place/activity is located (e.g., "123 Main St, Downtown", "Elmwood District, near the library", "waterfront area").
+- 'imageKeywords': One or two keywords for a representative image of the specific place/activity (e.g., "local coffee shop", "park fountain", "modern art piece").
 
 Your entire response MUST be a single, valid JSON object. The JSON object must have a single key "suggestions", and its value must be an array of suggestion objects (or an empty array if no suggestions are found), where each suggestion object has the keys: "name", "description", "category", "estimatedDuration", "locationHint", and "imageKeywords".
 Do NOT include any text outside of this JSON object.
 
 Example of a single suggestion object structure:
 {
-  "name": "Example Activity",
-  "description": "An example description.",
-  "category": "Example Category",
+  "name": "Example Specific Cafe",
+  "description": "An example description for a specific cafe.",
+  "category": "Food",
   "estimatedDuration": "approx. 1 hour",
-  "locationHint": "An example location hint.",
-  "imageKeywords": "example activity"
+  "locationHint": "Example Street, Town Center",
+  "imageKeywords": "cafe interior"
 }
 `;
 
