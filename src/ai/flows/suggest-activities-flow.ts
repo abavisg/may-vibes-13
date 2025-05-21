@@ -41,13 +41,13 @@ export async function suggestActivities(input: SuggestActivitiesInput): Promise<
   return suggestActivitiesFlow(input);
 }
 
-// This is the schema for the data that the prompt template itself expects.
+// This is the schema for the data that the Genkit prompt template itself expects.
 // It omits aiProvider as that's used for model selection, not directly in the template.
 const PromptDirectInputSchema = SuggestActivitiesInputSchema.omit({ aiProvider: true });
 
 const suggestActivitiesPrompt = ai.definePrompt({
   name: 'suggestActivitiesPrompt',
-  input: {schema: PromptDirectInputSchema}, // Use the schema without aiProvider
+  input: {schema: PromptDirectInputSchema},
   output: {schema: SuggestActivitiesOutputSchema},
   prompt: `You are WanderSnap, a friendly and creative AI assistant helping users discover activities.
 Based on the user's location context, mood, available time, and preferences, generate 5 to 10 diverse and engaging activity suggestions.
@@ -73,38 +73,135 @@ Example of a single suggestion object structure:
   "estimatedDuration": "approx. 1 hour",
   "locationHint": "a secluded spot in the city park"
 }
-Provide between 5 and 10 suggestions.
+Provide between 5 and 10 suggestions. Ensure your entire response is a single, valid JSON object.
 `,
 });
 
 const suggestActivitiesFlow = ai.defineFlow(
   {
     name: 'suggestActivitiesFlow',
-    inputSchema: SuggestActivitiesInputSchema, // Flow input includes aiProvider
+    inputSchema: SuggestActivitiesInputSchema,
     outputSchema: SuggestActivitiesOutputSchema,
   },
   async (input) => {
-    const modelToUse = input.aiProvider === 'ollama'
-      ? 'ollama/mistral' // Ensure this model is available in your Ollama setup
-      : 'googleai/gemini-1.5-flash-latest';
+    if (input.aiProvider === 'ollama') {
+      console.log("Attempting to use Ollama directly.");
+      const ollamaModel = 'mistral'; // Or make this configurable
+      const ollamaPrompt = `You are WanderSnap, a friendly and creative AI assistant.
+Generate between 5 and 10 diverse activity suggestions based on the following user inputs.
+User's Location Context: ${input.locationContext}
+User's Mood: ${input.mood}
+Time Available: ${input.timeAvailable}
+${input.preferences ? `User's Preferences: ${input.preferences}` : ''}
 
-    // Prepare the input for the prompt by excluding aiProvider
-    const promptInputData: z.infer<typeof PromptDirectInputSchema> = {
-      locationContext: input.locationContext,
-      mood: input.mood,
-      timeAvailable: input.timeAvailable,
-      preferences: input.preferences,
-    };
-    
-    console.log(`Requesting suggestions from ${input.aiProvider} using model ${modelToUse}`);
+For each suggestion, you MUST provide:
+- 'name': A catchy name for the activity.
+- 'description': A 2-3 sentence engaging description, tailored to the mood and time.
+- 'category': Choose one: Food, Outdoors, Arts, Relaxation, Adventure, Shopping, Sightseeing, Entertainment, Sports, Wellness, Educational.
+- 'estimatedDuration': An estimated duration fitting 'timeAvailable'.
+- 'locationHint': A general hint about where this activity might be found.
 
-    // Call the prompt, explicitly overriding the model for this specific call
-    const {output} = await suggestActivitiesPrompt(promptInputData, { model: modelToUse });
+Your entire response MUST be a single, valid JSON object. The JSON object must have a single key "suggestions", and its value must be an array of suggestion objects, where each suggestion object has the keys: "name", "description", "category", "estimatedDuration", and "locationHint".
+Do NOT include any text outside of this JSON object.
 
-    if (!output || !output.suggestions || output.suggestions.length === 0) {
-      console.warn(`AI (${input.aiProvider} using ${modelToUse}) did not return valid suggestions, returning empty array.`);
-      return { suggestions: [] };
+Example of a single suggestion object structure:
+{
+  "name": "Example Activity",
+  "description": "An example description.",
+  "category": "Example Category",
+  "estimatedDuration": "approx. 1 hour",
+  "locationHint": "An example location hint."
+}
+`;
+
+      try {
+        const ollamaResponse = await fetch('http://localhost:11434/api/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: ollamaModel,
+            prompt: ollamaPrompt,
+            format: 'json', // Request JSON output
+            stream: false,   // Get the full response at once
+          }),
+        });
+
+        if (!ollamaResponse.ok) {
+          const errorBody = await ollamaResponse.text();
+          console.error(`Ollama API error! Status: ${ollamaResponse.status}`, errorBody);
+          throw new Error(`Ollama API request failed with status ${ollamaResponse.status}: ${errorBody}`);
+        }
+
+        const ollamaData = await ollamaResponse.json();
+        
+        if (!ollamaData.response) {
+          console.error('Ollama response did not contain a "response" field:', ollamaData);
+          throw new Error('Invalid response structure from Ollama: missing "response" field.');
+        }
+
+        // The 'response' field from Ollama contains the stringified JSON content
+        const suggestionsJsonString = ollamaData.response;
+        
+        let parsedOutput;
+        try {
+          parsedOutput = JSON.parse(suggestionsJsonString);
+        } catch (e) {
+          console.error('Failed to parse JSON from Ollama response string:', suggestionsJsonString, e);
+          throw new Error('Ollama returned a string that is not valid JSON.');
+        }
+        
+        // Validate the parsed output against our Zod schema
+        const validationResult = SuggestActivitiesOutputSchema.safeParse(parsedOutput);
+        if (!validationResult.success) {
+          console.error('Ollama output failed Zod validation:', validationResult.error.flatten());
+          // Optionally, you could try to salvage partial data or return a more specific error
+          throw new Error('Ollama output did not match the expected schema.');
+        }
+
+        if (!validationResult.data || !validationResult.data.suggestions || validationResult.data.suggestions.length === 0) {
+            console.warn(`Ollama (direct call using ${ollamaModel}) did not return valid suggestions, returning empty array.`);
+            return { suggestions: [] };
+        }
+        return validationResult.data;
+
+      } catch (error) {
+        console.error('Error making direct call to Ollama or processing its response:', error);
+        // Fallback or rethrow, depending on desired behavior
+        toast({ title: 'Ollama Connection Error', description: `Could not get suggestions from local Ollama. Is it running? Error: ${error.message}`, variant: 'destructive' });
+        return { suggestions: [] }; // Return empty suggestions on error
+      }
+
+    } else { // 'googleai' provider (or any other Genkit-managed provider)
+      const modelToUse = 'googleai/gemini-1.5-flash-latest';
+
+      const promptInputData: z.infer<typeof PromptDirectInputSchema> = {
+        locationContext: input.locationContext,
+        mood: input.mood,
+        timeAvailable: input.timeAvailable,
+        preferences: input.preferences,
+      };
+      
+      console.log(`Requesting suggestions from ${input.aiProvider} using model ${modelToUse} via Genkit.`);
+
+      const {output} = await suggestActivitiesPrompt(promptInputData, { model: modelToUse });
+
+      if (!output || !output.suggestions || output.suggestions.length === 0) {
+        console.warn(`AI (${input.aiProvider} using ${modelToUse}) did not return valid suggestions, returning empty array.`);
+        return { suggestions: [] };
+      }
+      return output;
     }
-    return output;
   }
 );
+
+// Helper for direct Ollama call toast, not used in Genkit path.
+// This is a bit of a hack as flows shouldn't directly cause UI toasts.
+// Consider moving UI feedback to the calling component.
+const toast = (options: { title: string; description: string; variant?: 'destructive' | 'default' }) => {
+  // This is a placeholder. In a real app, you'd use your actual toast mechanism.
+  // For server-side code, you can't directly call client-side hooks like useToast.
+  // This would typically be handled by returning an error/status that the client interprets.
+  console.warn(`SERVER TOAST: ${options.title} - ${options.description}`);
+};
