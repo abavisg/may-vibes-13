@@ -1,7 +1,7 @@
 
 'use server';
 /**
- * @fileOverview Generates tailored activity suggestions based on user's location, mood, and time.
+ * @fileOverview Generates tailored activity suggestions based on user's location, mood, time, and chosen AI provider.
  *
  * - suggestActivities - A function that calls an AI model to get activity suggestions.
  * - SuggestActivitiesInput - The input type for the suggestActivities function.
@@ -11,12 +11,14 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import type { AiProvider } from '@/types';
 
 const SuggestActivitiesInputSchema = z.object({
   locationContext: z.string().describe("The user's current general location or area name (e.g., 'downtown San Francisco', 'near the beach', 'my current area')."),
   mood: z.string().describe("The user's current mood (e.g., 'Adventurous', 'Relaxed', 'Curious')."),
   timeAvailable: z.string().describe("The time the user has available (e.g., '30 minutes', '1 hour', 'half-day')."),
   preferences: z.string().optional().describe("Any specific user preferences (e.g., 'prefers quiet places', 'loves history')."),
+  aiProvider: z.enum(['googleai', 'ollama']).describe("The AI provider to use for generating suggestions."),
 });
 export type SuggestActivitiesInput = z.infer<typeof SuggestActivitiesInputSchema>;
 
@@ -39,9 +41,13 @@ export async function suggestActivities(input: SuggestActivitiesInput): Promise<
   return suggestActivitiesFlow(input);
 }
 
+// This is the schema for the data that the prompt template itself expects.
+// It omits aiProvider as that's used for model selection, not directly in the template.
+const PromptDirectInputSchema = SuggestActivitiesInputSchema.omit({ aiProvider: true });
+
 const suggestActivitiesPrompt = ai.definePrompt({
   name: 'suggestActivitiesPrompt',
-  input: {schema: SuggestActivitiesInputSchema},
+  input: {schema: PromptDirectInputSchema}, // Use the schema without aiProvider
   output: {schema: SuggestActivitiesOutputSchema},
   prompt: `You are WanderSnap, a friendly and creative AI assistant helping users discover activities.
 Based on the user's location context, mood, available time, and preferences, generate 5 to 10 diverse and engaging activity suggestions.
@@ -74,21 +80,31 @@ Provide between 5 and 10 suggestions.
 const suggestActivitiesFlow = ai.defineFlow(
   {
     name: 'suggestActivitiesFlow',
-    inputSchema: SuggestActivitiesInputSchema,
+    inputSchema: SuggestActivitiesInputSchema, // Flow input includes aiProvider
     outputSchema: SuggestActivitiesOutputSchema,
   },
   async (input) => {
-    // Using Ollama, so ensure the model can handle JSON output well.
-    // The prompt strongly guides it towards JSON.
-    const {output} = await suggestActivitiesPrompt(input);
-    if (!output || !output.suggestions) {
-      // Fallback or error handling if AI doesn't return expected structure
-      // This basic fallback ensures the app doesn't crash.
-      // In a real app, you might want more sophisticated error handling or retries.
-      console.warn('AI did not return valid suggestions, returning empty array.');
+    const modelToUse = input.aiProvider === 'ollama'
+      ? 'ollama/mistral' // Ensure this model is available in your Ollama setup
+      : 'googleai/gemini-1.5-flash-latest';
+
+    // Prepare the input for the prompt by excluding aiProvider
+    const promptInputData: z.infer<typeof PromptDirectInputSchema> = {
+      locationContext: input.locationContext,
+      mood: input.mood,
+      timeAvailable: input.timeAvailable,
+      preferences: input.preferences,
+    };
+    
+    console.log(`Requesting suggestions from ${input.aiProvider} using model ${modelToUse}`);
+
+    // Call the prompt, explicitly overriding the model for this specific call
+    const {output} = await suggestActivitiesPrompt(promptInputData, { model: modelToUse });
+
+    if (!output || !output.suggestions || output.suggestions.length === 0) {
+      console.warn(`AI (${input.aiProvider} using ${modelToUse}) did not return valid suggestions, returning empty array.`);
       return { suggestions: [] };
     }
     return output;
   }
 );
-

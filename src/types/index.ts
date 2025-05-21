@@ -6,6 +6,8 @@ export interface UserLocation {
   lng: number;
 }
 
+export type AiProvider = 'googleai' | 'ollama';
+
 export interface Activity {
   id: string;
   name: string;

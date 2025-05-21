@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { Activity, UserLocation } from '@/types';
+import type { Activity, UserLocation, AiProvider } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
@@ -25,10 +25,12 @@ import {
   Building,
   ShoppingBag,
   Heart,
-  Film, // For Entertainment
-  Bike, // For Sports
-  HeartPulse, // For Wellness
-  Library, // For Educational
+  Film, 
+  Bike, 
+  HeartPulse, 
+  Library, 
+  Brain, // For AI Provider selection
+  Settings2, // Alternative for AI provider
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -49,12 +51,17 @@ const timeOptions: { value: string; label: string }[] = [
   { value: 'Full-day', label: 'Full-day (8h)'},
 ];
 
+const aiProviderOptions: { value: AiProvider; label: string; icon: LucideIcon }[] = [
+  { value: 'googleai', label: 'Google AI', icon: Brain },
+  { value: 'ollama', label: 'Ollama (Local)', icon: Settings2 },
+];
+
 const mapCategoryToIcon = (categoryName?: string): LucideIcon => {
   const lowerCategory = categoryName?.toLowerCase() || '';
   if (lowerCategory.includes('food') || lowerCategory.includes('restaurant') || lowerCategory.includes('cafe')) return Utensils;
   if (lowerCategory.includes('outdoor') || lowerCategory.includes('park') || lowerCategory.includes('nature') || lowerCategory.includes('garden')) return Trees;
   if (lowerCategory.includes('art') || lowerCategory.includes('museum') || lowerCategory.includes('gallery') || lowerCategory.includes('culture')) return Palette;
-  if (lowerCategory.includes('relax') || lowerCategory.includes('chill') || lowerCategory.includes('peaceful')) return Coffee; // Or a more specific one like Leaf
+  if (lowerCategory.includes('relax') || lowerCategory.includes('chill') || lowerCategory.includes('peaceful')) return Coffee;
   if (lowerCategory.includes('adventure') || lowerCategory.includes('explore') || lowerCategory.includes('thrill')) return MountainSnow;
   if (lowerCategory.includes('shop') || lowerCategory.includes('market') || lowerCategory.includes('boutique')) return ShoppingBag;
   if (lowerCategory.includes('sightsee') || lowerCategory.includes('historic') || lowerCategory.includes('landmark') || lowerCategory.includes('tourist')) return Landmark;
@@ -71,12 +78,30 @@ export default function WanderSnapPage() {
   const [locationDisplayName, setLocationDisplayName] = useState<string | null>(null);
   const [mood, setMood] = useState<string | undefined>(undefined);
   const [timeAvailable, setTimeAvailable] = useState<string | undefined>(undefined);
+  const [aiProvider, setAiProvider] = useState<AiProvider>('googleai');
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [isLoadingActivities, setIsLoadingActivities] = useState(false);
-  const [userInteractedWithFind, setUserInteractedWithFind] = useState(false); // Tracks if "Find Activities" was clicked
+  const [userInteractedWithFind, setUserInteractedWithFind] = useState(false);
 
   const { toast } = useToast();
+
+  useEffect(() => {
+    const storedProvider = localStorage.getItem('aiProvider') as AiProvider | null;
+    if (storedProvider && aiProviderOptions.some(opt => opt.value === storedProvider)) {
+      setAiProvider(storedProvider);
+    }
+  }, []);
+
+  const handleAiProviderChange = (value: string) => {
+    const newProvider = value as AiProvider;
+    setAiProvider(newProvider);
+    localStorage.setItem('aiProvider', newProvider);
+    toast({
+      title: 'AI Provider Switched',
+      description: `Now using ${aiProviderOptions.find(opt => opt.value === newProvider)?.label}.`,
+    });
+  };
 
   const handleDetectLocation = () => {
     setIsLoadingLocation(true);
@@ -144,7 +169,7 @@ export default function WanderSnapPage() {
   };
 
   const handleFindActivities = async () => {
-    if (!location && !locationDisplayName) { // Allow if display name is set manually later
+    if (!location && !locationDisplayName) {
       toast({ title: 'Missing Location', description: 'Please detect your location first.', variant: 'destructive' });
       return;
     }
@@ -154,6 +179,10 @@ export default function WanderSnapPage() {
     }
     if (!timeAvailable) {
       toast({ title: 'Missing Time', description: 'Please select your available time.', variant: 'destructive' });
+      return;
+    }
+    if (!aiProvider) {
+      toast({ title: 'Missing AI Provider', description: 'Please select an AI provider.', variant: 'destructive' });
       return;
     }
 
@@ -168,19 +197,20 @@ export default function WanderSnapPage() {
         locationContext,
         mood: mood!,
         timeAvailable: timeAvailable!,
+        aiProvider: aiProvider!,
       });
 
       if (!aiOutput.suggestions || aiOutput.suggestions.length === 0) {
-        toast({ title: 'No Suggestions', description: 'The AI couldn\'t find any suggestions for your criteria. Try different options!' });
+        toast({ title: 'No Suggestions', description: `The AI (${aiProvider}) couldn't find any suggestions. Try different options!` });
         setActivities([]);
       } else {
         const newActivities: Activity[] = aiOutput.suggestions.map((sugg: ActivitySuggestion) => ({
           id: crypto.randomUUID(),
           name: sugg.name,
-          description: sugg.description, // This is now the AI-tailored summary
-          photoUrl: 'https://placehold.co/600x400.png', // Generic placeholder
+          description: sugg.description,
+          photoUrl: 'https://placehold.co/600x400.png', 
           dataAiHint: `${sugg.category.toLowerCase()} ${sugg.name.split(' ')[0].toLowerCase()}`,
-          location: location || undefined, // User's detected location for general context
+          location: location || undefined, 
           locationHint: sugg.locationHint,
           category: sugg.category,
           categoryIcon: mapCategoryToIcon(sugg.category),
@@ -189,27 +219,19 @@ export default function WanderSnapPage() {
         setActivities(newActivities);
       }
     } catch (error) {
-      console.error('Error fetching or processing AI suggestions:', error);
-      toast({ title: 'AI Suggestion Error', description: 'Could not get suggestions from the AI. Please try again.', variant: 'destructive' });
-      setActivities([]); // Ensure activities are cleared on error
+      console.error(`Error fetching or processing AI suggestions from ${aiProvider}:`, error);
+      toast({ title: 'AI Suggestion Error', description: `Could not get suggestions from ${aiProvider}. Please check your setup and try again.`, variant: 'destructive' });
+      setActivities([]);
     } finally {
       setIsLoadingActivities(false);
     }
   };
   
-  // Initial auto-detect location attempt (optional, can be enabled)
-  // useEffect(() => {
-  //   if (!location && !locationDisplayName && !isLoadingLocation) {
-  //     // handleDetectLocation(); // Be mindful of user privacy and permissions
-  //   }
-  // }, [location, locationDisplayName, isLoadingLocation]);
-
-
   return (
     <div className="container mx-auto px-4 py-8 min-h-screen flex flex-col">
       <header className="text-center py-8">
         <div className="inline-flex items-center justify-center mb-4">
-           <Heart className="w-16 h-16 text-primary" /> {/* Or another suitable app icon */}
+           <Heart className="w-16 h-16 text-primary" />
         </div>
         <h1 className="text-5xl font-bold text-primary tracking-tight">WanderSnap</h1>
         <p className="text-lg text-muted-foreground mt-2">Discover your next adventure, instantly.</p>
@@ -217,8 +239,8 @@ export default function WanderSnapPage() {
 
       <Card className="mb-8 shadow-xl rounded-xl">
         <CardContent className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            <div className="md:col-span-1">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 items-end">
+            <div className="lg:col-span-1">
               <label htmlFor="location-button" className="block text-sm font-medium text-foreground mb-1">Location</label>
               <Button
                 id="location-button"
@@ -228,30 +250,18 @@ export default function WanderSnapPage() {
                 variant="outline"
               >
                 {isLoadingLocation ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Detecting...
-                  </>
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Detecting...</>
                 ) : locationDisplayName ? (
-                  <>
-                    <MapPin className="mr-2 h-4 w-4" />
-                    {locationDisplayName}
-                  </>
-                ) : location ? ( // Fallback if name fetch failed but coords exist
-                  <>
-                    <LocateFixed className="mr-2 h-4 w-4" />
-                    Coordinates Detected
-                  </>
+                  <><MapPin className="mr-2 h-4 w-4" />{locationDisplayName}</>
+                ) : location ? (
+                  <><LocateFixed className="mr-2 h-4 w-4" />Coordinates Detected</>
                 ) : (
-                  <>
-                    <LocateFixed className="mr-2 h-4 w-4" />
-                    Detect My Location
-                  </>
+                  <><LocateFixed className="mr-2 h-4 w-4" />Detect My Location</>
                 )}
               </Button>
             </div>
 
-            <div className="md:col-span-1">
+            <div className="lg:col-span-1">
               <label htmlFor="mood-select" className="block text-sm font-medium text-foreground mb-1">Mood</label>
               <Select value={mood} onValueChange={setMood}>
                 <SelectTrigger id="mood-select" className="w-full">
@@ -270,7 +280,7 @@ export default function WanderSnapPage() {
               </Select>
             </div>
             
-            <div className="md:col-span-1">
+            <div className="lg:col-span-1">
               <label htmlFor="time-select" className="block text-sm font-medium text-foreground mb-1">Time Available</label>
               <Select value={timeAvailable} onValueChange={setTimeAvailable}>
                 <SelectTrigger id="time-select" className="w-full">
@@ -286,10 +296,29 @@ export default function WanderSnapPage() {
               </Select>
             </div>
 
+            <div className="lg:col-span-1">
+              <label htmlFor="ai-provider-select" className="block text-sm font-medium text-foreground mb-1">AI Provider</label>
+              <Select value={aiProvider} onValueChange={handleAiProviderChange}>
+                <SelectTrigger id="ai-provider-select" className="w-full">
+                  <SelectValue placeholder="Select AI Provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  {aiProviderOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      <div className="flex items-center">
+                        <option.icon className="mr-2 h-4 w-4 text-muted-foreground" />
+                        {option.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <Button
               onClick={handleFindActivities}
-              disabled={isLoadingActivities || (!location && !locationDisplayName) || !mood || !timeAvailable}
-              className="w-full md:col-span-1 bg-primary hover:bg-primary/90 text-primary-foreground"
+              disabled={isLoadingActivities || (!location && !locationDisplayName) || !mood || !timeAvailable || !aiProvider}
+              className="w-full lg:col-span-1 bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               {isLoadingActivities ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -299,30 +328,34 @@ export default function WanderSnapPage() {
               Find Activities
             </Button>
           </div>
+          <div className="text-xs text-muted-foreground text-center">
+            {aiProvider === 'googleai' && 'Ensure GOOGLE_API_KEY is set in your environment.'}
+            {aiProvider === 'ollama' && 'Ensure your local Ollama server is running (typically at http://localhost:11434) and has the selected model (e.g., mistral).'}
+          </div>
         </CardContent>
       </Card>
 
       {isLoadingActivities && (
         <div className="text-center py-10">
           <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
-          <p className="mt-2 text-muted-foreground">Snapping up adventures with AI...</p>
+          <p className="mt-2 text-muted-foreground">Snapping up adventures with {aiProviderOptions.find(opt => opt.value === aiProvider)?.label || 'AI'}...</p>
         </div>
       )}
 
-      {!isLoadingActivities && activities.length === 0 && userInteractedWithFind && ( // Check userInteractedWithFind
+      {!isLoadingActivities && activities.length === 0 && userInteractedWithFind && (
          <div className="text-center py-10">
-           <Search className="h-12 w-12 text-muted-foreground mx-auto" /> {/* Changed icon */}
+           <Search className="h-12 w-12 text-muted-foreground mx-auto" />
            <p className="mt-4 text-lg text-muted-foreground">No AI suggestions found for these settings.</p>
-           <p className="text-sm text-muted-foreground">Try adjusting your mood, time, or location.</p>
+           <p className="text-sm text-muted-foreground">Try adjusting your mood, time, location, or AI provider.</p>
          </div>
        )}
 
-      {!isLoadingActivities && activities.length === 0 && !userInteractedWithFind && ( // Check userInteractedWithFind
+      {!isLoadingActivities && activities.length === 0 && !userInteractedWithFind && (
         <div className="text-center py-10 flex-grow flex flex-col items-center justify-center">
           <MapPin className="h-16 w-16 text-muted-foreground/50 mx-auto mb-4" />
           <h2 className="text-2xl font-semibold text-foreground mb-2">Ready to Explore?</h2>
           <p className="text-muted-foreground max-w-md">
-            Detect your location, select your current mood and available time,
+            Detect your location, select your mood, time, and preferred AI provider,
             then hit "Find Activities" to get AI-powered suggestions!
           </p>
         </div>
@@ -338,4 +371,3 @@ export default function WanderSnapPage() {
     </div>
   );
 }
-

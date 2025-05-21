@@ -1,15 +1,25 @@
+
 import {genkit} from 'genkit';
 import {googleAI} from '@genkit-ai/googleai';
+// import {ollama} from '@genkit-ai/ollama'; // Ensure this is uncommented
 
 export const ai = genkit({
   plugins: [
     googleAI({
       // Genkit will automatically look for GOOGLE_API_KEY in process.env
-      // You can explicitly set it here:
-      // apiKey: process.env.GOOGLE_API_KEY,
     }),
+    // ollama({ // Ensure this is uncommented
+    //   // Ensure your Ollama server is running, typically at http://localhost:11434
+    //   // You can specify serverAddress and defaultModel if needed, e.g.:
+    //   serverAddress: 'http://127.0.0.1:11434',
+    //   defaultModel: 'mistral', // Default model for Ollama, can be overridden in flows
+    // }),
   ],
   // Set a default model for top-level ai.generate() calls.
-  // The format is '<plugin_name>/<model_name>'.
+  // This will be overridden by specific model selections in flows if that flow uses aiProvider.
+  // For flows not specifying a model, this googleai model will be used.
   model: 'googleai/gemini-1.5-flash-latest',
+  logLevel: 'debug',
+  enableTracingAndMetrics: true,
 });
+
