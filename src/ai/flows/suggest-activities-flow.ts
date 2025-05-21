@@ -86,7 +86,7 @@ const suggestActivitiesFlow = ai.defineFlow(
   async (input) => {
     if (input.aiProvider === 'ollama') {
       console.log("Attempting to use Ollama directly.");
-      const ollamaModel = 'mistral'; // Or make this configurable
+      const ollamaModel = 'tinyllama:latest'; // Or make this configurable
       const ollamaPrompt = `You are WanderSnap, a friendly and creative AI assistant.
 Generate between 5 and 10 diverse activity suggestions based on the following user inputs. If no suitable activities can be found, return an empty array for "suggestions".
 User's Location Context: ${input.locationContext}
